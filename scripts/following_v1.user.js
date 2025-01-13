@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Lichess Show Followed in Lobby
 // @namespace    https://example.com
-// @version      1.0
+// @version      1.1
 // @description  Shows "(F)" next to users that you follow
 // @match        https://lichess.org/*
 // @connect      lichess.org
@@ -11,6 +11,7 @@
 (function() {
     'use strict';
 
+    const DEBUG_MODE = true;
     const AUTH_TOKEN = 'lip_............'; // << PUT YOUR AUTH TOKEN HERE
     const LABEL_EVERYWHERE = false;
     const MARKER_CLASS = 'lichess-follow-marker';
@@ -72,7 +73,7 @@
     // Debounced rescan scheduler
     function scheduleRescan() {
         if (debouncing) return;
-        
+
         debouncing = true;
         setTimeout(() => {
             debouncing = false;
@@ -82,7 +83,7 @@
 
     // DOM mutation handler
     function onDomMutations(mutationList) {
-        const hasRelevantChanges = mutationList.some(mutation => 
+        const hasRelevantChanges = mutationList.some(mutation =>
             mutation.type === 'childList' &&
             Array.from(mutation.addedNodes).some(node =>
                 node.nodeType === 1 && // Element node
@@ -108,6 +109,14 @@
     }
 
     // Initialize: fetch followed users then start observing
+    if (DEBUG_MODE) {
+        console.log('[Lichess-Follow] Making API call to https://lichess.org/api/rel/following');
+        console.log('[Lichess-Follow] Headers:', {
+            'Accept': 'application/x-ndjson',
+            'Authorization': 'Bearer ' + AUTH_TOKEN.slice(0, 8) + '...' // Only show first 8 chars for security
+        });
+    }
+
     fetch('https://lichess.org/api/rel/following', {
         method: 'GET',
         headers: {
@@ -120,7 +129,14 @@
             throw new Error(`HTTP ${resp.status} from /api/rel/following`);
         }
 
-        const lines = (await resp.text()).trim().split('\n');
+        const text = await resp.text();
+        if (DEBUG_MODE) {
+            console.log('[Lichess-Follow] API Response Status:', resp.status);
+            console.log('[Lichess-Follow] API Response Headers:', Object.fromEntries([...resp.headers]));
+            console.log('[Lichess-Follow] API Response Body:', text);
+        }
+
+        const lines = text.trim().split('\n');
         for (const line of lines) {
             try {
                 const { username } = JSON.parse(line);
@@ -130,6 +146,10 @@
             } catch (err) {
                 console.warn('[Lichess-Follow] Parse error:', err);
             }
+        }
+
+        if (DEBUG_MODE) {
+            console.log('[Lichess-Follow] Parsed followed users:', [...followedUsers]);
         }
 
         startObserving();
